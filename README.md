@@ -107,6 +107,38 @@ is busy or disconnected. Test streaming and external tool calls separately
 before connecting autonomous coding agents. Do not expose this unauthenticated
 proxy publicly.
 
+## Reliable user service on vibe (ARTeMob deployment)
+
+The example service in [`ops/systemd/artemob-codex-web-proxy.service`](ops/systemd/artemob-codex-web-proxy.service)
+runs the fork from `/home/scofmb/workspaces/codex-proxy-fork-runtime` on
+`127.0.0.1:3467`. It starts on boot when user lingering is enabled and
+restarts automatically after an unexpected process exit. It does not control
+or restart the original proxy on 3466 or the Codex Web GPT browser launcher.
+
+A small optional systemd timer checks local proxy health and bridge TCP port
+17841 about every 30 seconds. If the bridge goes down and later comes back,
+it restarts only this proxy to drop any stale app-server worker connections.
+If the proxy is unhealthy twice consecutively, it restarts this proxy as well.
+It does **not** replay failed inference requests; 9Router may fail over to an
+alternate model while browser-backed access is unavailable.
+
+To install as the `scofmb` user on `vibe` after stopping an existing manual
+listener on port 3467:
+
+```bash
+cp ops/systemd/*.service ops/systemd/*.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now artemob-codex-web-proxy.service \
+  artemob-codex-web-proxy-watch.timer
+systemctl --user status artemob-codex-web-proxy.service
+journalctl --user -u artemob-codex-web-proxy.service -n 40 --no-pager
+```
+
+The launcher remains responsible for the Web bridge and browser login. If the
+launcher itself never restarts or the ChatGPT session expires, it still needs
+repair/re-authentication; neither systemd nor this proxy can create a login.
+Keep the port bound to loopback; for Kimsufi use Tailscale Serve, not Funnel.
+
 ## Runtime modes
 
 `codex-proxy` supports two Codex app-server runtime modes:

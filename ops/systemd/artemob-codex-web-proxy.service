@@ -1,0 +1,30 @@
+[Unit]
+Description=ARTeMob Codex Proxy for ChatGPT Web (localhost:3467)
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/home/scofmb/workspaces/codex-proxy-fork-runtime
+Environment=HOME=/home/scofmb
+Environment=CODEX_HOME=/home/scofmb/.codex
+Environment=CODEX_CHATGPT_WEB_HOME=/home/scofmb/.codex-chatgpt-web
+Environment=XDG_CONFIG_HOME=/home/scofmb/.config
+Environment=CODEX_PROXY_HOST=127.0.0.1
+Environment=CODEX_PROXY_PORT=3467
+Environment=CODEX_PROXY_CODEX_BIN=/home/scofmb/.local/opt/node24/bin/codex
+Environment=CODEX_PROXY_DEFAULT_MODEL=chatgpt-web/gpt-6-sol
+Environment=CODEX_PROXY_POOL_MAX=2
+Environment=CODEX_PROXY_INIT_POOL=0
+Environment=CODEX_PROXY_SANDBOX=read-only
+Environment=CODEX_PROXY_APPROVAL_POLICY=never
+Environment=CODEX_PROXY_TIMEOUT_MS=180000
+ExecStart=/home/scofmb/.local/opt/node-v24.20.0-linux-x64/bin/node dist/server/standalone.js
+Restart=always
+RestartSec=5s
+TimeoutStopSec=20s
+KillMode=control-group
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
