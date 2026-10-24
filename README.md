@@ -27,7 +27,7 @@ v0.4.8 local proxy. Working locally with:
 - improved `/v1/responses` compatibility for string input, message arrays, mixed content parts, function-call/function-call-output inputs, reasoning/summary/item-reference inputs, and SDK-friendly streaming event aliases
 - `/v1/models`, `/health`, `/healthz/deep`, `/version`, `/metrics`, `/pricing`
 - app-server stdio transport over the official `codex app-server`
-- pooled persistent `codex app-server` workers with one ephemeral thread per request by default
+- pooled persistent `codex app-server` workers with one ephemeral thread per native-model request by default; Web-backed models use non-ephemeral native threads
 - opt-in, TTL/LRU-limited sticky Codex session/thread pooling via `CODEX_PROXY_STICKY_SESSIONS=1` + `X-Codex-Proxy-Session-Key` or legacy `CODEX_PROXY_SESSIONS=1` + `X-Codex-Proxy-Session`
 - one-shot fallback mode for eligible pool transport failures before response bytes are committed
 - SSE keepalive comments plus writable-guard hardening for streaming clients and early disconnects
@@ -72,11 +72,46 @@ node dist/server/standalone.js 3470
 
 The standalone server handles `SIGINT` and `SIGTERM` by closing the HTTP server with a configurable grace period (`CODEX_PROXY_SHUTDOWN_GRACE_MS`, default `10000`).
 
+## ChatGPT Web-backed models (community integration)
+
+For installations with the separate, community-maintained `codex-chatgpt-web`
+bridge, this fork supports model IDs such as `chatgpt-web/gpt-6-sol` via the
+Codex app-server. The browser bridge must already be installed, authenticated,
+and healthy; the proxy does **not** automate its login or copy credentials.
+
+Unlike native Codex models, Web-backed models require **non-ephemeral native
+Codex threads** for trusted task context. This fork selects that policy
+according to the model prefix for one-shot, pooled, and sticky requests.
+
+For an isolated localhost-only smoke test (run as the same user who configured
+Codex Web GPT):
+
+```bash
+CODEX_PROXY_PORT=3467 \
+CODEX_PROXY_CODEX_BIN="$(command -v codex)" \
+CODEX_PROXY_DEFAULT_MODEL=chatgpt-web/gpt-6-sol \
+CODEX_PROXY_POOL_MAX=1 CODEX_PROXY_INIT_POOL=0 \
+CODEX_PROXY_SANDBOX=read-only npm start
+```
+
+```bash
+curl -sS http://127.0.0.1:3467/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"chatgpt-web/gpt-6-sol","messages":[{"role":"user","content":"Reply OK only"}]}'
+```
+
+The model list includes the Web model IDs as configured examples. It is **not**
+a live entitlement or browser-health query. Browser-backed requests may be
+slower, depend on an interactive browser session, and can fail if that session
+is busy or disconnected. Test streaming and external tool calls separately
+before connecting autonomous coding agents. Do not expose this unauthenticated
+proxy publicly.
+
 ## Runtime modes
 
 `codex-proxy` supports two Codex app-server runtime modes:
 
-- `pool` (default): keeps warm persistent `codex app-server --listen stdio://` workers and reuses each worker across sequential requests. Every request still starts a fresh ephemeral Codex thread.
+- `pool` (default): keeps warm persistent `codex app-server --listen stdio://` workers and reuses each worker across sequential requests. Each native-model request starts a fresh ephemeral Codex thread; `chatgpt-web/` model requests start fresh non-ephemeral threads.
 - `oneshot`: starts a fresh app-server process per request, matching the original v0.2 behavior.
 
 Configure the default with:
@@ -103,7 +138,7 @@ Pool controls:
 
 ## Opt-in sticky sessions
 
-Default behavior is stateless at the Codex thread layer: pooled workers are reused, but every normal request starts a fresh ephemeral Codex thread. A caller gets Codex thread continuity only by opting in.
+Default behavior is stateless at the Codex thread layer: pooled workers are reused, but each normal request starts a fresh thread. Native-model threads are ephemeral; browser-backed `chatgpt-web/` threads persist in Codex session history to preserve trusted task context. A caller gets Codex thread continuity only by opting in.
 
 Preferred protocol:
 
