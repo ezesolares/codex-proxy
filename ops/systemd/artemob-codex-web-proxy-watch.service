@@ -1,0 +1,9 @@
+[Unit]
+Description=ARTeMob Codex Web Proxy availability and recovery check
+After=artemob-codex-web-proxy.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/scofmb
+ExecStart=/usr/bin/python3 /home/scofmb/workspaces/codex-proxy-fork-runtime/ops/systemd/codex_web_proxy_watch.py
+TimeoutStartSec=15s

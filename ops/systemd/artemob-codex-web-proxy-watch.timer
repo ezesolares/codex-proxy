@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Codex Web Proxy and recover after bridge reconnects
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=30s
+AccuracySec=10s
+Unit=artemob-codex-web-proxy-watch.service
+
+[Install]
+WantedBy=timers.target

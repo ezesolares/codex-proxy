@@ -27,7 +27,7 @@ v0.4.8 local proxy. Working locally with:
 - improved `/v1/responses` compatibility for string input, message arrays, mixed content parts, function-call/function-call-output inputs, reasoning/summary/item-reference inputs, and SDK-friendly streaming event aliases
 - `/v1/models`, `/health`, `/healthz/deep`, `/version`, `/metrics`, `/pricing`
 - app-server stdio transport over the official `codex app-server`
-- pooled persistent `codex app-server` workers with one ephemeral thread per request by default
+- pooled persistent `codex app-server` workers with one ephemeral thread per native-model request by default; Web-backed models use non-ephemeral native threads
 - opt-in, TTL/LRU-limited sticky Codex session/thread pooling via `CODEX_PROXY_STICKY_SESSIONS=1` + `X-Codex-Proxy-Session-Key` or legacy `CODEX_PROXY_SESSIONS=1` + `X-Codex-Proxy-Session`
 - one-shot fallback mode for eligible pool transport failures before response bytes are committed
 - SSE keepalive comments plus writable-guard hardening for streaming clients and early disconnects
@@ -72,11 +72,78 @@ node dist/server/standalone.js 3470
 
 The standalone server handles `SIGINT` and `SIGTERM` by closing the HTTP server with a configurable grace period (`CODEX_PROXY_SHUTDOWN_GRACE_MS`, default `10000`).
 
+## ChatGPT Web-backed models (community integration)
+
+For installations with the separate, community-maintained `codex-chatgpt-web`
+bridge, this fork supports model IDs such as `chatgpt-web/gpt-6-sol` via the
+Codex app-server. The browser bridge must already be installed, authenticated,
+and healthy; the proxy does **not** automate its login or copy credentials.
+
+Unlike native Codex models, Web-backed models require **non-ephemeral native
+Codex threads** for trusted task context. This fork selects that policy
+according to the model prefix for one-shot, pooled, and sticky requests.
+
+For an isolated localhost-only smoke test (run as the same user who configured
+Codex Web GPT):
+
+```bash
+CODEX_PROXY_PORT=3467 \
+CODEX_PROXY_CODEX_BIN="$(command -v codex)" \
+CODEX_PROXY_DEFAULT_MODEL=chatgpt-web/gpt-6-sol \
+CODEX_PROXY_POOL_MAX=1 CODEX_PROXY_INIT_POOL=0 \
+CODEX_PROXY_SANDBOX=read-only npm start
+```
+
+```bash
+curl -sS http://127.0.0.1:3467/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"chatgpt-web/gpt-6-sol","messages":[{"role":"user","content":"Reply OK only"}]}'
+```
+
+The model list includes the Web model IDs as configured examples. It is **not**
+a live entitlement or browser-health query. Browser-backed requests may be
+slower, depend on an interactive browser session, and can fail if that session
+is busy or disconnected. Test streaming and external tool calls separately
+before connecting autonomous coding agents. Do not expose this unauthenticated
+proxy publicly.
+
+## Reliable user service on vibe (ARTeMob deployment)
+
+The example service in [`ops/systemd/artemob-codex-web-proxy.service`](ops/systemd/artemob-codex-web-proxy.service)
+runs the fork from `/home/scofmb/workspaces/codex-proxy-fork-runtime` on
+`127.0.0.1:3467`. It starts on boot when user lingering is enabled and
+restarts automatically after an unexpected process exit. It does not control
+or restart the original proxy on 3466 or the Codex Web GPT browser launcher.
+
+A small optional systemd timer checks local proxy health and bridge TCP port
+17841 about every 30 seconds. If the bridge goes down and later comes back,
+it restarts only this proxy to drop any stale app-server worker connections.
+If the proxy is unhealthy twice consecutively, it restarts this proxy as well.
+It does **not** replay failed inference requests; 9Router may fail over to an
+alternate model while browser-backed access is unavailable.
+
+To install as the `scofmb` user on `vibe` after stopping an existing manual
+listener on port 3467:
+
+```bash
+cp ops/systemd/*.service ops/systemd/*.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now artemob-codex-web-proxy.service \
+  artemob-codex-web-proxy-watch.timer
+systemctl --user status artemob-codex-web-proxy.service
+journalctl --user -u artemob-codex-web-proxy.service -n 40 --no-pager
+```
+
+The launcher remains responsible for the Web bridge and browser login. If the
+launcher itself never restarts or the ChatGPT session expires, it still needs
+repair/re-authentication; neither systemd nor this proxy can create a login.
+Keep the port bound to loopback; for Kimsufi use Tailscale Serve, not Funnel.
+
 ## Runtime modes
 
 `codex-proxy` supports two Codex app-server runtime modes:
 
-- `pool` (default): keeps warm persistent `codex app-server --listen stdio://` workers and reuses each worker across sequential requests. Every request still starts a fresh ephemeral Codex thread.
+- `pool` (default): keeps warm persistent `codex app-server --listen stdio://` workers and reuses each worker across sequential requests. Each native-model request starts a fresh ephemeral Codex thread; `chatgpt-web/` model requests start fresh non-ephemeral threads.
 - `oneshot`: starts a fresh app-server process per request, matching the original v0.2 behavior.
 
 Configure the default with:
@@ -103,7 +170,7 @@ Pool controls:
 
 ## Opt-in sticky sessions
 
-Default behavior is stateless at the Codex thread layer: pooled workers are reused, but every normal request starts a fresh ephemeral Codex thread. A caller gets Codex thread continuity only by opting in.
+Default behavior is stateless at the Codex thread layer: pooled workers are reused, but each normal request starts a fresh thread. Native-model threads are ephemeral; browser-backed `chatgpt-web/` threads persist in Codex session history to preserve trusted task context. A caller gets Codex thread continuity only by opting in.
 
 Preferred protocol:
 
