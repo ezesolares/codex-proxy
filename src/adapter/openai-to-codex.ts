@@ -24,6 +24,17 @@ import type { UserInput, UserImageInput } from "../types/codex.js";
 const DEFAULT_MODEL = process.env.CODEX_PROXY_DEFAULT_MODEL || "gpt-5.5";
 
 export const AVAILABLE_MODELS = [
+  "gpt-6.1-sol",
+  "gpt-6-astra",
+  "gpt-6-sol",
+  "gpt-6-luna",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "chatgpt-web/gpt-6-sol-instant",
+  "chatgpt-web/gpt-6-sol",
+  "chatgpt-web/gpt-5.6-sol-instant",
+  "chatgpt-web/gpt-5.6-sol",
   "gpt-5.5",
   "gpt-5.4",
   "gpt-5.4-mini",

@@ -9,6 +9,13 @@ test("model list includes current Codex models", () => {
   assert.ok(AVAILABLE_MODELS.includes("gpt-5.3-codex"));
 });
 
+test("model list advertises the native and Web models used by routing", () => {
+  assert.ok(AVAILABLE_MODELS.includes("chatgpt-web/gpt-6-sol"));
+  assert.ok(AVAILABLE_MODELS.includes("gpt-6-astra"));
+  assert.ok(AVAILABLE_MODELS.includes("gpt-6.1-sol"));
+  assert.equal(canonicalModelLabel("chatgpt-web/gpt-6-sol"), "chatgpt-web/gpt-6-sol");
+});
+
 test("resolveModel falls back to default", () => {
   assert.equal(resolveModel(null), process.env.CODEX_PROXY_DEFAULT_MODEL || "gpt-5.5");
   assert.equal(resolveModel("gpt-5.4"), "gpt-5.4");

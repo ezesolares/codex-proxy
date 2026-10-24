@@ -2,14 +2,14 @@
  * Codex app-server subprocess manager.
  *
  * Spawns `codex app-server` over stdio, performs JSON-RPC handshake
- * (initialize + initialized), starts an ephemeral thread, submits a
+ * (initialize + initialized), starts a Codex thread, submits a
  * turn, and collects streamed agent message deltas until the turn
  * completes.
  *
  * Design: the manager owns one official app-server process. It can be
  * used one-shot per request or kept warm by the worker pool; every turn
- * still starts a fresh ephemeral Codex thread unless higher layers add
- * explicit session semantics.
+ * starts a fresh thread per turn unless higher layers add explicit session
+ * semantics. Browser-backed threads persist trusted task context.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -25,6 +25,7 @@ import { recordSubprocessExit } from "../server/metrics.js";
 import { VERSION } from "../server/version.js";
 import type { UsageCostEstimate } from "../server/pricing.js";
 import { trace, traceError } from "../server/trace.js";
+import { shouldUseEphemeralThread } from "./thread-policy.js";
 import type {
   RequestId,
   InitializeResponse,
@@ -371,7 +372,7 @@ export class CodexSubprocess {
     imageUrls?: string[],
   ): Promise<TurnResult> {
     trace("subprocess.submit_turn.enter", { instanceId: this.instanceId, userText, options, streaming: Boolean(deltaCallback), imageUrls });
-    const threadId = await this.startThread(options, true);
+    const threadId = await this.startThread(options, shouldUseEphemeralThread(options.model));
     return this.submitTurnOnThread(threadId, userText, options, deltaCallback, notificationCallback, imageUrls);
   }
 

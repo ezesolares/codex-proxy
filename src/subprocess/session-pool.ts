@@ -1,3 +1,4 @@
+import { shouldUseEphemeralThread } from "./thread-policy.js";
 import { buildPoolKey, type PoolWorker } from "./pool.js";
 import { CodexSubprocess, type CodexSubprocessOptions, type DeltaCallback, type NotificationCallback, type TurnResult } from "./manager.js";
 import { CONFIG } from "../server/config.js";
@@ -245,7 +246,7 @@ export class CodexSessionPool<T extends SessionWorker = CodexSubprocess> {
       trace("session_pool.create_slot.worker_start", { key, options });
       await worker.start(options);
       trace("session_pool.create_slot.thread_start", { key, options });
-      const threadId = await worker.startThread(options, true);
+      const threadId = await worker.startThread(options, shouldUseEphemeralThread(options.model));
       const now = this.now();
       const slot: SessionSlot<T> = {
         key,
